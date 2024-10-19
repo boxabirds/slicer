@@ -1,8 +1,10 @@
-import replicate
 import os
 import tempfile
-from pydub import AudioSegment
-from fasthtml.common import Div, H1, P, Form, Input, Button, serve, fast_app
+from fasthtml.common import *
+from transcribe import transcribe_audio  # Import the transcribe module
+from slice import slice_audio_by_words  # Import the slice module
+from soundfonts import create_sf2_json_file
+from pathlib import Path
 
 # Initialize FastHTML app
 app, rt = fast_app()
@@ -41,23 +43,27 @@ async def process(request):
     audio_file = form['audio_file']
     audio_path = save_temp_file(audio_file)
 
-    # Open the audio file as a binary stream and send to WhisperX via Replicate
-    with open(audio_path, "rb") as f:
-        response = call_whisperx_api(f)
+    # Transcribe the audio file
+    try:
+        words = transcribe_audio(audio_path)
+    except Exception as e:
+        return Div(
+            P(f"Error processing audio file: {str(e)}", cls="text-center text-lg mt-4 text-red-500"),
+            cls="flex flex-col items-center"
+        )
 
-    # Process the response and create word-level audio files
-    if response and 'segments' in response:
-        segments = response['segments']
-        temp_dir = slice_word_audio(segments, audio_path)
-        return Div(
-            P(f"Files created in temporary directory: {temp_dir}", cls="text-center text-lg mt-4"),
-            cls="flex flex-col items-center"
-        )
-    else:
-        return Div(
-            P("Error processing audio file or no segments found.", cls="text-center text-lg mt-4 text-red-500"),
-            cls="flex flex-col items-center"
-        )
+    # Slice the audio by words
+    words_with_paths = slice_audio_by_words(audio_path, words)
+
+    # Assuming words_with_paths already contains files in a temp directory
+    temp_dir = Path(words_with_paths[0]['file_path']).parent
+    sf2_json_path = create_sf2_json_file(temp_dir)
+
+    # Display the results including the temporary directory where the word audio files are saved
+    return Div(
+        P(f"SoundFont JSON file created. Check the console for file path. File saved in {sf2_json_path.resolve()}", cls="text-center text-lg mt-4"),
+        cls="flex flex-col items-center"
+    )
 
 # Helper function to save uploaded file in a temporary directory
 def save_temp_file(file):
@@ -66,57 +72,6 @@ def save_temp_file(file):
     with open(file_path, 'wb') as f:
         f.write(file.file.read())
     return file_path
-
-# Helper function to call WhisperX via Replicate using the binary file
-def call_whisperx_api(file):
-
-    # the replicate system requires an API token -- this is really just documenting what is being expected
-    replicate_api_token = os.getenv('REPLICATE_API_TOKEN')
-    if not replicate_api_token:
-        raise EnvironmentError("REPLICATE_API_TOKEN environment variable not set")
-
-    model_version = "victor-upmeet/whisperx:84d2ad2d6194fe98a17d2b60bef1c7f910c46b2f6fd38996ca457afd9c8abfcb"
-    prediction = replicate.run(
-        model_version,
-        input={
-            "audio_file": file,  # Pass the file directly
-            "batch_size": 64,
-            "vad_onset": 0.5,
-            "vad_offset": 0.363,
-            "diarization": False,
-            "temperature": 0,
-            "align_output": True  # Enable word-level timestamps
-        }
-    )
-    return prediction
-
-# Function to slice audio by words using Pydub
-def slice_word_audio(segments, audio_path):
-    audio = AudioSegment.from_file(audio_path)
-    temp_dir = tempfile.mkdtemp()
-
-    for segment in segments:
-        word_timestamps = segment.get('words', [])
-        for i, word_info in enumerate(word_timestamps):
-            word = word_info['word'].strip()
-            start_time = word_info['start']  # in seconds
-            end_time = word_info['end']      # in seconds
-
-            # Calculate start and end in milliseconds
-            start_ms = int(start_time * 1000)
-            end_ms = int(end_time * 1000)
-
-            # Extract the word's audio segment
-            word_audio = audio[start_ms:end_ms]
-
-            # Make word filenames safe
-            safe_word = ''.join(c for c in word if c.isalnum() or c in (' ', '_')).replace(' ', '_')
-
-            # Save the word as a WAV file
-            word_file_path = os.path.join(temp_dir, f"{i+1:04d}_{safe_word}_{start_time:.2f}_{end_time:.2f}.wav")
-            word_audio.export(word_file_path, format="wav")
-
-    return temp_dir
 
 # Start the FastHTML app
 serve()
