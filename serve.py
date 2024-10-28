@@ -101,6 +101,8 @@ async def convert(request):
 
     # Create the SoundFont .sf2 file
     temp_dir = Path(words_with_paths[0]['file_path']).parent
+
+    print(f"Creating SoundFont from wav files in '{temp_dir}'")
     sf, sf2_json_path = create_sf2_json_file(temp_dir,  start_note)
     sf2_path = temp_dir / f"{sf2_json_path.stem}.sf2"
     create_sf2_from_json(sf2_json_path, sf2_path)

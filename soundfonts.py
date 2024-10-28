@@ -287,7 +287,9 @@ class SoundFont:
 class Sample:
     def __init__(self, wav_path: Path):
         with wave.open(str(wav_path), 'rb') as wav_file:
-            self.name = wav_path.stem
+            # we have a filename like 0001_what.wav
+            # we want to use just the word as the sample name
+            self.name = '_'.join(wav_path.stem.split('_')[1:]) if '_' in wav_path.stem else wav_path.stem
             self.sample_rate = wav_file.getframerate()
             self.sample_length = wav_file.getnframes()
             self.original_pitch = 60  # Default to middle C
@@ -316,6 +318,7 @@ class Sample:
 
     @staticmethod
     def create_terminator():
+        # end of sample terminator -- need to have this after all the other real samples
         return {
             "name": "EOS",
             "start": 0,
@@ -537,6 +540,7 @@ def create_sf2_from_json(json_path, output_path):
                             if operator == 43:  # rangesType
                                 if isinstance(amount, list) and len(amount) == 2:
                                     low_byte, high_byte = amount
+                                    print(f"  {subchunk}: {operator} {low_byte} {high_byte}")
                                     amount = (high_byte << 8) | low_byte
                                 else:
                                     print(f"Warning: Invalid amount format for operator 43 in {subchunk}. Using 0.")
@@ -600,17 +604,28 @@ def create_sf2_from_json(json_path, output_path):
 
 def create_sf2_json_file(samples_dir: Path, start_note: int = 60) -> Tuple[SoundFont, Path]:
     sf = SoundFont(
-        name="AudioSlicer",
-        author="WordPlay",
+        name=samples_dir.name,
+        author="AudioSlicer",
         product="AudioSlicer",
-        copyright="2024 WordPlay",
-        comments="Created by WordPlay"
+        copyright="2024 Slice.media",
+        comments="Created by Slice.media"
     )
     sf.create_default_preset_and_instrument()
 
-    samples = sorted(samples_dir.glob("*.wav"), key=lambda x: os.path.getmtime(x))
-    for i, sample_path in enumerate(samples):
+    max_samples = 127 - start_note + 1
+    samples = sorted(samples_dir.glob("*.wav"))[:max_samples]
+    # print out the samples found
+
+    selected_samples = samples[:max_samples]
+    if len(samples) > max_samples:
+        print(f"Warning: Number of samples ({len(samples)}) exceeds the maximum allowed ({max_samples}) when starting at note {start_note}")
+        print("The following samples were skipped:")
+        for sample in samples[max_samples:]:
+            print(f"- {sample}")
+
+    for i, sample_path in enumerate(selected_samples):
         zone = Zone(sample_path, root_key=start_note + i, lower_key=start_note + i, upper_key=start_note + i)
+        print(f"Adding zone for {sample_path}")
         sf.add_zone_to_default_instrument(zone)
 
     return sf, sf.save(samples_dir)
