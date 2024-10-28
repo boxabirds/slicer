@@ -52,11 +52,14 @@ def transcribe_audio(file_path):
         words = []
         for segment in prediction['segments']:
             for word_info in segment.get('words', []):
-                words.append({
-                    'word': word_info['word'].strip(),
-                    'start': word_info['start'],
-                    'end': word_info['end']
-                })
+                if 'start' in word_info and 'end' in word_info:
+                    words.append({
+                        'word': word_info['word'].strip(),
+                        'start': word_info['start'],
+                        'end': word_info['end']
+                    })
+                else:
+                    print(f"Skipping word {word_info['word']} due to missing start or end")
         print(json.dumps(words, indent=2))
         return words
     else:
