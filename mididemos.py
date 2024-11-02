@@ -53,10 +53,7 @@ def create_demo_midi_files(sf: SoundFont, start_note: int, sf2_path: Path):
         
         # Quantize start time to nearest eighth note
         quantized_start = math.ceil(time * 2) / 2
-        
-        # Adjust duration to avoid overlap
-       # adjusted_duration = max(duration_quarter_notes - (quantized_start - time), 0.125)  # Minimum duration of 1/8 note
-        
+                
         #print(f"Adding quantized note {pitch} with duration {adjusted_duration} quarter notes at time {quantized_start} at volume {volume}")
         midi_quantized.addNote(track, channel, pitch, quantized_start, duration_quarter_notes, volume)
         

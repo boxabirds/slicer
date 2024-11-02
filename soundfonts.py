@@ -287,9 +287,8 @@ class SoundFont:
 class Sample:
     def __init__(self, wav_path: Path):
         with wave.open(str(wav_path), 'rb') as wav_file:
-            # we have a filename like 0001_what.wav
-            # we want to use just the word as the sample name
-            self.name = '_'.join(wav_path.stem.split('_')[1:]) if '_' in wav_path.stem else wav_path.stem
+            # Use the entire filename as the sample name
+            self.name = wav_path.stem
             self.sample_rate = wav_file.getframerate()
             self.sample_length = wav_file.getnframes()
             self.original_pitch = 60  # Default to middle C
